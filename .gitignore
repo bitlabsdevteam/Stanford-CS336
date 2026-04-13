@@ -1,0 +1,6 @@
+.venv/
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+requirements-notebooks.lock.txt
+.DS_Store
