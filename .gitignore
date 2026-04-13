@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 requirements-notebooks.lock.txt
 .DS_Store
+AGENTS.md
