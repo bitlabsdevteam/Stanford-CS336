@@ -1,0 +1,7 @@
+Metadata-Version: 2.4
+Name: bpe-tokenizer
+Version: 0.1.0
+Summary: Production-oriented byte-level BPE tokenizer package for the CS336 assignment workspace.
+Requires-Python: >=3.11
+Requires-Dist: numpy>=2.0
+Requires-Dist: regex>=2024.0
