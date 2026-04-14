@@ -5,15 +5,20 @@ from torch import Tensor
 
 from GPT import (
     AdamW,
+    average_gradients_flat,
+    BucketedDistributedDataParallel,
     CausalMultiheadSelfAttention,
     decode,
     Embedding,
     FlashAttentionForwardAutogradFunctionPyTorch,
     FlashAttentionForwardAutogradFunctionTriton,
+    FlatDistributedDataParallel,
+    IndividualParameterDistributedDataParallel,
     generate,
     Linear,
     RMSNorm,
     RotaryPositionalEmbedding,
+    ShardedOptimizer,
     SwiGLU,
     TransformerBlock,
     TransformerLM,
@@ -351,6 +356,17 @@ def get_adamw_cls() -> type[torch.optim.Optimizer]:
     return AdamW
 
 
+def get_sharded_optimizer(
+    params,
+    optimizer_cls: type[torch.optim.Optimizer],
+    **kwargs,
+) -> torch.optim.Optimizer:
+    """
+    Return the assignment optimizer-state sharding wrapper.
+    """
+    return ShardedOptimizer(params=params, optimizer_cls=optimizer_cls, **kwargs)
+
+
 def get_flashattention_autograd_function_pytorch() -> type[torch.autograd.Function]:
     """
     Return the PyTorch FlashAttention forward autograd.Function subclass.
@@ -479,6 +495,73 @@ def run_decode(
     )
 
 
+def minimal_ddp_flat(model: torch.nn.Module) -> float:
+    """
+    Synchronize gradients with a single flattened all-reduce call.
+    """
+
+    return average_gradients_flat(model)
+
+
+def get_minimal_ddp_flat(module: torch.nn.Module) -> FlatDistributedDataParallel:
+    """
+    Return the flattened-gradient DDP wrapper used in assignment benchmarking.
+    """
+
+    return FlatDistributedDataParallel(module)
+
+
+def get_ddp_individual_parameters(
+    module: torch.nn.Module,
+) -> IndividualParameterDistributedDataParallel:
+    """
+    Return the DDP wrapper that overlaps per-parameter gradient communication.
+    """
+
+    return IndividualParameterDistributedDataParallel(module)
+
+
+def ddp_individual_parameters_on_after_backward(model: torch.nn.Module) -> None:
+    """
+    Adapter hook invoked after backward in some assignment harnesses.
+    """
+
+    finish = getattr(model, "finish_gradient_synchronization", None)
+    if callable(finish):
+        finish()
+
+
+def get_ddp_bucketed(
+    module: torch.nn.Module,
+    bucket_size_mb: float,
+) -> BucketedDistributedDataParallel:
+    """
+    Return the DDP wrapper that overlaps communication of gradient buckets.
+    """
+
+    return BucketedDistributedDataParallel(module, bucket_size_mb=bucket_size_mb)
+
+
+def ddp_bucketed_on_after_backward(model: torch.nn.Module) -> None:
+    """
+    Adapter hook invoked after backward in some assignment harnesses.
+    """
+
+    finish = getattr(model, "finish_gradient_synchronization", None)
+    if callable(finish):
+        finish()
+
+
+def ddp_bucketed_on_train_batch_start(model: torch.nn.Module) -> None:
+    """
+    Optional adapter hook for harness compatibility.
+    """
+
+    reset = getattr(model, "start_gradient_synchronization", None)
+    if callable(reset):
+        reset()
+
+
 __all__ = [
     "run_linear",
     "run_embedding",
@@ -496,6 +579,7 @@ __all__ = [
     "run_transformer_block",
     "run_transformer_lm",
     "get_adamw_cls",
+    "get_sharded_optimizer",
     "get_flashattention_autograd_function_pytorch",
     "get_flash_autograd_function_triton",
     "get_lr_cosine_schedule",
@@ -504,4 +588,11 @@ __all__ = [
     "run_load_checkpoint",
     "run_generate",
     "run_decode",
+    "minimal_ddp_flat",
+    "get_minimal_ddp_flat",
+    "get_ddp_individual_parameters",
+    "ddp_individual_parameters_on_after_backward",
+    "get_ddp_bucketed",
+    "ddp_bucketed_on_after_backward",
+    "ddp_bucketed_on_train_batch_start",
 ]

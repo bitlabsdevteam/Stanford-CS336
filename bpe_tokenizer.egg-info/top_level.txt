@@ -1,2 +1,2 @@
-bpe_tokenizer
 GPT
+bpe_tokenizer

@@ -11,6 +11,13 @@ from .embedding import Embedding
 from .attention import scaled_dot_product_attention
 from .cross_entropy import cross_entropy
 from .decoding import decode, generate, sample_next_token, temperature_scaled_softmax, top_p_filter
+from .ddp import (
+    average_gradients,
+    average_gradients_flat,
+    BucketedDistributedDataParallel,
+    FlatDistributedDataParallel,
+    IndividualParameterDistributedDataParallel,
+)
 from .flash_attention import (
     FlashAttentionForwardAutogradFunctionPyTorch,
     FlashAttentionForwardAutogradFunctionTriton,
@@ -20,7 +27,7 @@ from .flash_attention import (
 )
 from .linear import Linear
 from .multihead_attention import CausalMultiheadSelfAttention
-from .optimization import AdamW, clip_gradients, lr_cosine_schedule
+from .optimization import AdamW, ShardedOptimizer, clip_gradients, lr_cosine_schedule
 from .rotary import RotaryPositionalEmbedding
 from .rmsnorm import RMSNorm
 from .softmax import softmax
@@ -43,6 +50,7 @@ __all__ = [
     "Embedding",
     "Linear",
     "AdamW",
+    "ShardedOptimizer",
     "FlashAttentionForwardAutogradFunctionPyTorch",
     "FlashAttentionForwardAutogradFunctionTriton",
     "RMSNorm",
@@ -57,6 +65,10 @@ __all__ = [
     "cross_entropy",
     "decode",
     "estimate_loss",
+    "average_gradients",
+    "average_gradients_flat",
+    "BucketedDistributedDataParallel",
+    "FlatDistributedDataParallel",
     "flash_attention_backward_pytorch",
     "flash_attention_forward_pytorch",
     "flash_attention_forward_triton",
@@ -70,6 +82,7 @@ __all__ = [
     "sample_next_token",
     "save_checkpoint",
     "softmax",
+    "IndividualParameterDistributedDataParallel",
     "temperature_scaled_softmax",
     "top_p_filter",
     "train_language_model",
