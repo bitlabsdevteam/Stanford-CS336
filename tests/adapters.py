@@ -8,6 +8,8 @@ from GPT import (
     CausalMultiheadSelfAttention,
     decode,
     Embedding,
+    FlashAttentionForwardAutogradFunctionPyTorch,
+    FlashAttentionForwardAutogradFunctionTriton,
     generate,
     Linear,
     RMSNorm,
@@ -349,6 +351,20 @@ def get_adamw_cls() -> type[torch.optim.Optimizer]:
     return AdamW
 
 
+def get_flashattention_autograd_function_pytorch() -> type[torch.autograd.Function]:
+    """
+    Return the PyTorch FlashAttention forward autograd.Function subclass.
+    """
+    return FlashAttentionForwardAutogradFunctionPyTorch
+
+
+def get_flash_autograd_function_triton() -> type[torch.autograd.Function]:
+    """
+    Return the Triton-backed FlashAttention forward autograd.Function subclass.
+    """
+    return FlashAttentionForwardAutogradFunctionTriton
+
+
 def get_lr_cosine_schedule(
     it: int | None = None,
     *,
@@ -480,6 +496,8 @@ __all__ = [
     "run_transformer_block",
     "run_transformer_lm",
     "get_adamw_cls",
+    "get_flashattention_autograd_function_pytorch",
+    "get_flash_autograd_function_triton",
     "get_lr_cosine_schedule",
     "run_gradient_clipping",
     "run_save_checkpoint",

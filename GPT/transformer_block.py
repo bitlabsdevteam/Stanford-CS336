@@ -3,6 +3,7 @@ from __future__ import annotations
 import torch
 from torch import Tensor, nn
 
+from . import nvtx
 from .multihead_attention import CausalMultiheadSelfAttention
 from .rmsnorm import RMSNorm
 from .swiglu import SwiGLU
@@ -73,6 +74,9 @@ class TransformerBlock(nn.Module):
                 f"Sequence length {x.shape[-2]} exceeds max_seq_len {self.max_seq_len}."
             )
 
-        x = x + self.attn(self.norm1(x), token_positions=token_positions)
-        x = x + self.ffn(self.norm2(x))
-        return x
+        with nvtx.range("transformer_block"):
+            with nvtx.range("attention_block"):
+                x = x + self.attn(self.norm1(x), token_positions=token_positions)
+            with nvtx.range("ffn_block"):
+                x = x + self.ffn(self.norm2(x))
+            return x

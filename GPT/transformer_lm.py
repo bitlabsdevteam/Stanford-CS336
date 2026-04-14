@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from torch import Tensor, nn
 
 from .embedding import Embedding
+from . import nvtx
 from .rmsnorm import RMSNorm
 from .transformer_block import TransformerBlock
 
@@ -89,11 +90,16 @@ class TransformerLM(nn.Module):
         if token_positions is None:
             token_positions = torch.arange(seq_len, device=token_ids.device, dtype=torch.long)
 
-        x = self.token_embedding(token_ids)
-        for block in self.blocks:
-            x = block(x, token_positions=token_positions)
-        x = self.final_norm(x)
-        return F.linear(x, self.token_embedding.weight)
+        with nvtx.range("transformer_lm_forward"):
+            with nvtx.range("token_embedding"):
+                x = self.token_embedding(token_ids)
+            with nvtx.range("transformer_blocks"):
+                for block in self.blocks:
+                    x = block(x, token_positions=token_positions)
+            with nvtx.range("final_norm"):
+                x = self.final_norm(x)
+            with nvtx.range("lm_head"):
+                return F.linear(x, self.token_embedding.weight)
 
     def generate(
         self,

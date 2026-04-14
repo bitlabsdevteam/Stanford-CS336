@@ -5,6 +5,8 @@ import math
 import torch
 from torch import Tensor
 
+from . import nvtx
+
 
 def scaled_dot_product_attention(
     q: Tensor,
@@ -35,30 +37,38 @@ def scaled_dot_product_attention(
     if k.shape[-2] != v.shape[-2]:
         raise ValueError("k and v must have the same sequence length.")
 
-    scores = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(q.shape[-1])
+    with nvtx.range("scaled_dot_product_attention"):
+        with nvtx.range("attention_scores"):
+            scores = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(q.shape[-1])
 
-    if mask is None:
-        weights = torch.softmax(scores, dim=-1)
-        return torch.matmul(weights, v)
+        if mask is None:
+            with nvtx.range("attention_softmax"):
+                weights = torch.softmax(scores, dim=-1)
+            with nvtx.range("attention_value_matmul"):
+                return torch.matmul(weights, v)
 
-    if mask.dtype != torch.bool:
-        raise ValueError("mask must have boolean dtype.")
-    if mask.ndim != 2:
-        raise ValueError("mask must have shape (num_queries, num_keys).")
-    if mask.shape != (q.shape[-2], k.shape[-2]):
-        raise ValueError(
-            "mask shape must match the attention score shape "
-            f"({q.shape[-2]}, {k.shape[-2]})."
-        )
+        if mask.dtype != torch.bool:
+            raise ValueError("mask must have boolean dtype.")
+        if mask.ndim != 2:
+            raise ValueError("mask must have shape (num_queries, num_keys).")
+        if mask.shape != (q.shape[-2], k.shape[-2]):
+            raise ValueError(
+                "mask shape must match the attention score shape "
+                f"({q.shape[-2]}, {k.shape[-2]})."
+            )
 
-    expanded_mask = mask.to(device=scores.device)
-    masked_scores = scores.masked_fill(~expanded_mask, float("-inf"))
-    weights = torch.softmax(masked_scores, dim=-1)
+        expanded_mask = mask.to(device=scores.device)
+        with nvtx.range("attention_mask"):
+            masked_scores = scores.masked_fill(~expanded_mask, float("-inf"))
+        with nvtx.range("attention_softmax"):
+            weights = torch.softmax(masked_scores, dim=-1)
 
-    # Renormalize after zeroing masked entries so the allowed positions sum to 1
-    # exactly, even in edge cases like rows with a single permitted key.
-    weights = torch.where(expanded_mask, weights, torch.zeros_like(weights))
-    weight_sums = weights.sum(dim=-1, keepdim=True)
-    weights = torch.where(weight_sums > 0, weights / weight_sums, torch.zeros_like(weights))
+        # Renormalize after zeroing masked entries so the allowed positions sum to 1
+        # exactly, even in edge cases like rows with a single permitted key.
+        with nvtx.range("attention_renormalize"):
+            weights = torch.where(expanded_mask, weights, torch.zeros_like(weights))
+            weight_sums = weights.sum(dim=-1, keepdim=True)
+            weights = torch.where(weight_sums > 0, weights / weight_sums, torch.zeros_like(weights))
 
-    return torch.matmul(weights, v)
+        with nvtx.range("attention_value_matmul"):
+            return torch.matmul(weights, v)

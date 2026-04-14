@@ -11,6 +11,13 @@ from .embedding import Embedding
 from .attention import scaled_dot_product_attention
 from .cross_entropy import cross_entropy
 from .decoding import decode, generate, sample_next_token, temperature_scaled_softmax, top_p_filter
+from .flash_attention import (
+    FlashAttentionForwardAutogradFunctionPyTorch,
+    FlashAttentionForwardAutogradFunctionTriton,
+    flash_attention_backward_pytorch,
+    flash_attention_forward_pytorch,
+    flash_attention_forward_triton,
+)
 from .linear import Linear
 from .multihead_attention import CausalMultiheadSelfAttention
 from .optimization import AdamW, clip_gradients, lr_cosine_schedule
@@ -36,6 +43,8 @@ __all__ = [
     "Embedding",
     "Linear",
     "AdamW",
+    "FlashAttentionForwardAutogradFunctionPyTorch",
+    "FlashAttentionForwardAutogradFunctionTriton",
     "RMSNorm",
     "RotaryPositionalEmbedding",
     "SwiGLU",
@@ -48,6 +57,9 @@ __all__ = [
     "cross_entropy",
     "decode",
     "estimate_loss",
+    "flash_attention_backward_pytorch",
+    "flash_attention_forward_pytorch",
+    "flash_attention_forward_triton",
     "format_metrics",
     "generate",
     "get_batch",

@@ -43,7 +43,7 @@ The current test suite covers the core GPT building blocks, including embeddings
 
 ## Benchmark The GPT Model
 
-Use [`scripts/benchmark_transformer.py`](/Users/davidbong/Documents/LLM_Assignments/scripts/benchmark_transformer.py) to time forward-only or forward-plus-backward passes with random weights and random token batches:
+Use [`scripts/benchmark_transformer.py`](/Users/davidbong/Documents/LLM_Assignments/scripts/benchmark_transformer.py) to time forward-only, forward-plus-backward, or full training-step passes with random weights and random token batches:
 
 ```bash
 python scripts/benchmark_transformer.py \
@@ -61,9 +61,102 @@ Useful options:
 
 - `--mode forward` benchmarks only the forward pass.
 - `--mode forward-backward` benchmarks a training-style forward pass, cross-entropy loss, and backward pass.
+- `--mode train-step` benchmarks forward pass, loss, backward pass, and the assignment `AdamW` optimizer step.
+- `--mixed-precision-dtype bf16` runs the forward and loss under autocast while keeping model parameters in `--dtype`.
 - `--model-size` accepts `small`, `medium`, `large`, `xl`, and `2.7b`.
 - `--d-model`, `--d-ff`, `--num-layers`, and `--num-heads` can override a preset for quick smoke tests.
 - `--json` prints machine-readable output for sweep scripts or notebook tables.
+
+For Nsight Systems profiling on a CUDA machine, the benchmark emits NVTX ranges for warmup, measured iterations, forward, backward, optimizer step, and the major self-attention sub-operations. Example:
+
+```bash
+uv run nsys profile -o nsys_small_ctx128 \
+  python scripts/benchmark_transformer.py \
+  --model-size small \
+  --context-length 128 \
+  --batch-size 4 \
+  --warmup-steps 5 \
+  --measure-steps 1 \
+  --mode train-step \
+  --device cuda \
+  --dtype float32
+```
+
+Example BF16 mixed-precision benchmark:
+
+```bash
+python scripts/benchmark_transformer.py \
+  --model-size small \
+  --context-length 128 \
+  --batch-size 4 \
+  --warmup-steps 5 \
+  --measure-steps 10 \
+  --mode forward-backward \
+  --device cuda \
+  --dtype float32 \
+  --mixed-precision-dtype bf16
+```
+
+Example CUDA memory snapshot for the PyTorch memory visualizer:
+
+```bash
+python scripts/benchmark_transformer.py \
+  --model-size 2.7b \
+  --context-length 128 \
+  --batch-size 1 \
+  --warmup-steps 3 \
+  --measure-steps 1 \
+  --mode train-step \
+  --device cuda \
+  --dtype float32 \
+  --memory-profile-path memory_snapshot.pickle
+```
+
+When running on CUDA, the benchmark also reports `peak_memory_allocated_mib` and `peak_memory_reserved_mib`. If `--memory-profile-path` is set, it records allocation history after warmup, dumps a pickle file at the end of the measured region, and that file can be loaded into the PyTorch memory visualizer at `pytorch.org/memory_viz`.
+
+To compare eager vs. `torch.compile` on the same Transformer configuration, pass both execution variants:
+
+```bash
+python scripts/benchmark_transformer.py \
+  --model-size small \
+  --context-length 128 \
+  --batch-size 4 \
+  --warmup-steps 5 \
+  --measure-steps 10 \
+  --mode train-step \
+  --device cuda \
+  --execution-variants eager,compiled
+```
+
+## Benchmark Attention
+
+Use [`scripts/benchmark_attention.py`](/Users/davidbong/Documents/LLM_Assignments/scripts/benchmark_attention.py) to sweep the standalone scaled dot-product attention kernel over the assignment grid of head dimensions and sequence lengths:
+
+```bash
+python scripts/benchmark_attention.py \
+  --device cuda \
+  --dtype float32 \
+  --warmup-steps 10 \
+  --iterations 100 \
+  --variants eager,compiled
+```
+
+The default sweep matches the assignment: batch size `8`, head dimensions `16,32,64,128`, and sequence lengths `256,1024,4096,8192,16384`. The markdown table reports forward and backward timings, the CUDA memory allocated immediately before backward, the quadratic `(B, T, T)` tensor footprint, and any out-of-memory stage.
+
+## Benchmark Distributed All-Reduce
+
+Use [`scripts/benchmark_distributed_all_reduce.py`](/Users/davidbong/Documents/LLM_Assignments/scripts/benchmark_distributed_all_reduce.py) to benchmark single-node multi-process `all_reduce` over the assignment communication grid:
+
+```bash
+python scripts/benchmark_distributed_all_reduce.py \
+  --backend-device-pairs gloo+cpu,nccl+cuda \
+  --data-sizes-mb 1,10,100,1024 \
+  --process-counts 2,4,6 \
+  --warmup-iterations 5 \
+  --measure-iterations 20
+```
+
+The script prints a markdown table with per-configuration latency summaries and a short commentary block. On CPU-only machines, the `nccl+cuda` rows are reported as skipped; on multi-GPU machines, ensure at least as many visible GPUs as the requested process count.
 
 ## Train The GPT Model
 
